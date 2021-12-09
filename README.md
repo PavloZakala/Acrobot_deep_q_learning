@@ -14,13 +14,13 @@
   |:--:|
   | <b>Loss plot</b>|
   
-  ![Loss](images/Score.png)
+  ![Score](images/Score.png)
   |:--:|
   | <b>Score plot</b>|
   
-  ![Loss](images/Steps num.png)
+  ![Steps_num](images/Steps_num.png)
   |:--:|
   | <b>Steps number plot</b>|
   
-  За 1000 епізодів навчання середній reward вдалось підвищити з -500 до -74 та вирішити поставленю задачу.
+  За 1000 епізодів навчання середній reward вдалось підвищити з -500 до -74.9 та вирішити поставленю задачу.
   
