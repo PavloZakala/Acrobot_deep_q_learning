@@ -5,10 +5,9 @@ from train_acrobot import Agent
 if __name__ == '__main__':
 
     env = gym.make('Acrobot-v1')
-    env.seed(0)  # Set a random seed for the environment (reproducible results)
 
     agent = Agent(env)
-    agent.load_current_state("model/model_700.pth")
+    agent.load_current_state("model/model.pth")
 
     state = env.reset()
     score = 0

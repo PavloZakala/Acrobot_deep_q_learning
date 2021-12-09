@@ -10,7 +10,7 @@ class ReplayMemory(object):
         self.memory.append((state, action, next_state, reward))
 
     def sample(self, batch_size):
-        batch_size = min(batch_size, len(self))
+        batch_size = min(batch_size, len(self.memory))
         return random.sample(self.memory, batch_size)
 
     def __len__(self):
