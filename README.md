@@ -10,5 +10,17 @@
   
 ## Результати 
   
+  ![Loss](images/Loss.png)
+  |:--:|
+  | <b>Loss plot</b>|
+  
+  ![Loss](images/Score.png)
+  |:--:|
+  | <b>Score plot</b>|
+  
+  ![Loss](images/Steps num.png)
+  |:--:|
+  | <b>Steps number plot</b>|
+  
   За 1000 епізодів навчання середній reward вдалось підвищити з -500 до -74 та вирішити поставленю задачу.
   
