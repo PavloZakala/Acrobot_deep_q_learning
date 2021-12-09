@@ -17,11 +17,12 @@ MEMORY = 10000  # Replay memory capacity
 LR = 1e-3
 BATCH_SIZE = 256
 
+NET_SAVE_STEP = 100
 NET_UPDATE_SPET = 10  # Number of episodes to wait before updating the target network
 MIN_SAMPLES_FOR_TRAINING = 1000
 
 INIT_EXP_DELAY_VALUE = 5
-NUM_EPISODES = 800
+NUM_EPISODES = 1000
 
 # Exponential decay
 exp_decay = np.exp(-np.log(
@@ -68,86 +69,70 @@ class Agent:
         # Initialize the loss function
         self.loss_fn = nn.SmoothL1Loss()
 
-    def get_best_action(self, state, eps):
+    def get_best_action(self, state):
 
         with torch.no_grad():
             self.main_net.eval()
             state = torch.tensor(state, dtype=torch.float32)  # Convert the state to tensor
-            net_out = self.main_net(state)
+            out = self.main_net(state)
 
-        # Get the best action (argmax of the network output)
-        best_action = int(net_out.argmax())
-        action_space_dim = net_out.shape[-1]
-
-        # Select a non optimal action with probability epsilon, otherwise choose the best action
-        if random.random() < eps:
-            non_optimal_actions = [a for a in range(action_space_dim) if a != best_action]
-            action = random.choice(non_optimal_actions)
-        else:
-            action = best_action
-
-        return action, net_out.cpu().numpy()
+        best_action = int(out.argmax())
+        return best_action, out.cpu().numpy()
 
     def get_action(self, state, eps):
 
         if eps == 0:
-            return self.get_best_action(state, 0)
+            return self.get_best_action(state)
+
+        eps = max(eps, 1e-8)
 
         with torch.no_grad():
             self.main_net.eval()
             state = torch.tensor(state, dtype=torch.float32)
-            net_out = self.main_net(state)
+            out = self.main_net(state)
 
-        eps = max(eps, 1e-8)
-        softmax_out = nn.functional.softmax(net_out / eps, dim=0).cpu().numpy()
+        actions_prob = nn.functional.softmax(out / eps, dim=0).cpu().numpy()
 
-        all_possible_actions = np.arange(0, softmax_out.shape[-1])
-        action = np.random.choice(all_possible_actions, p=softmax_out)
+        possible_actions = np.arange(0, actions_prob.shape[-1])
+        action = np.random.choice(possible_actions, p=actions_prob)
 
-        return action, net_out.cpu().numpy()
+        return action, out.cpu().numpy()
 
     def update_step(self):
         global GAMMA, BATCH_SIZE
 
-        # Sample the data from the replay memory
         batch = self.replay_mem.sample(BATCH_SIZE)
-        BATCH_SIZE = len(batch)
 
-        # Create tensors for each element of the batch
+        # Create tensors
         states = torch.tensor(np.array([s[0] for s in batch]), dtype=torch.float32, device=device)
+        next_states = torch.tensor(np.array([s[2] for s in batch if s[2] is not None]), dtype=torch.float32,
+                                   device=device)
+        next_states_mask = torch.tensor(np.array([s[2] is not None for s in batch]), dtype=torch.bool)
         actions = torch.tensor(np.array([s[1] for s in batch]), dtype=torch.int64, device=device)
         rewards = torch.tensor(np.array([s[3] for s in batch]), dtype=torch.float32, device=device)
 
-        # Compute a mask of non-final states (all the elements where the next state is not None)
-        non_final_next_states = torch.tensor(np.array([s[2] for s in batch if s[2] is not None]), dtype=torch.float32,
-                                             device=device)
-        non_final_mask = torch.tensor(np.array([s[2] is not None for s in batch]), dtype=torch.bool)
 
-        # Compute all the Q values (forward pass)
         self.main_net.train()
         q_values = self.main_net(states)
-        # Select the proper Q value for the corresponding action taken Q(s_t, a)
+
         state_action_values = q_values.gather(1, actions.unsqueeze(1).cuda())
 
-        # Compute the value function of the next states using the target network V(s_{t+1}) = max_a( Q_target(s_{t+1}, a)) )
         with torch.no_grad():
             self.target_net.eval()
-            q_values_target = self.target_net(non_final_next_states)
+            q_values_target = self.target_net(next_states)
         next_state_max_q_values = torch.zeros(BATCH_SIZE, device=device)
-        next_state_max_q_values[non_final_mask] = q_values_target.max(dim=1)[0].detach()
+        next_state_max_q_values[next_states_mask] = q_values_target.max(dim=1)[0].detach()
 
-        # Compute the expected Q values
-        expected_state_action_values = rewards + (next_state_max_q_values * GAMMA)
-        expected_state_action_values = expected_state_action_values.unsqueeze(1)  # Set the required tensor shape
 
-        # Compute the Huber loss
-        loss = self.loss_fn(state_action_values, expected_state_action_values)
+        expected_q_values = (rewards + (next_state_max_q_values * GAMMA))
 
-        # Optimize the model
+        # Loss
+        loss = self.loss_fn(state_action_values, expected_q_values.unsqueeze(1))
+
         self.optimizer.zero_grad()
         loss.backward()
-        # Apply gradient clipping (clip all the gradients greater than 2 for training stability)
-        nn.utils.clip_grad_norm_(self.main_net.parameters(), 2)
+
+        nn.utils.clip_grad_norm_(self.main_net.parameters(), 2) # For training stability
         self.optimizer.step()
 
     def step(self, state, eps):
@@ -157,15 +142,13 @@ class Agent:
         # Apply the action and get the next state, reward and done
         next_state, reward, done, _ = self.env.step(action)
 
-        # Apply penalty for bad state
-        if done:  # if the pole has fallen down
+        if done:
             next_state = None
 
-        # Update the replay memory
+        # Update replay memory
         self.replay_mem.push(state, action, next_state, reward)
 
-        # we enable the training only if we have enough samples in the replay memory,
-        # otherwise the training will use the same samples too often
+        # training only if we have enough samples in the replay memory
         if len(self.replay_mem) > MIN_SAMPLES_FOR_TRAINING:
             self.update_step()
 
@@ -192,6 +175,7 @@ if __name__ == '__main__':
     env.seed(0)  # Set a random seed for the environment (reproducible results)
 
     agent = Agent(env)
+
     for episode, eps in enumerate(exploration_profile):
 
         state = env.reset()
@@ -210,6 +194,8 @@ if __name__ == '__main__':
         if episode % NET_UPDATE_SPET == 0:
             agent.update_target_network()
 
+        if episode % NET_SAVE_STEP == 0:
+            agent.save_current_state(f"model/model_{episode}.pth")
         print(f"Episode: {episode + 1}, Score: {score}")
 
     env.close()
