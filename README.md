@@ -4,7 +4,7 @@
   Навчити модель для гри на карті [Acrobot-v1]()
 ## Розв'язок
 
-  В якості методу використно Deep Q-learning.
+  В якості методу використно Deep **Q-learning**.
   
   Для пом'якшення нестабільності навчання використано **Replay Buffers**.
   
@@ -12,15 +12,15 @@
   
   ![Loss](images/Loss.png)
   |:--:|
-  | <b>Loss plot</b>|
+  | **Loss plot**|
   
   ![Score](images/Score.png)
   |:--:|
-  | <b>Score plot</b>|
+  | **Score plot** |
   
   ![Steps_num](images/Steps_num.png)
   |:--:|
-  | <b>Steps number plot</b>|
+  | **Steps number plot** |
   
   За 1000 епізодів навчання середній reward вдалось підвищити з -500 до -74.9 та вирішити поставленю задачу.
   
